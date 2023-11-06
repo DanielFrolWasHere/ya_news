@@ -5,20 +5,20 @@ from http import HTTPStatus
 from django.urls import reverse
 
 from pytest_django.asserts import assertRedirects, assertFormError
-from pytils.translit import slugify
 
-from news.forms import BAD_WORDS, WARNING, CommentForm
+from news.forms import BAD_WORDS, WARNING
 
-from news.models import News, Comment
+from news.models import Comment
 
 pytestmark = pytest.mark.django_db
-
-
 
 
 def test_anonymous_user_cant_create_comment(client, news_pk_arg, form_data):
     url = reverse('news:detail', args=(news_pk_arg))
     response = client.post(url, data=form_data)
+    login_url = reverse('users:login')
+    expected_url = f'{login_url}?next={url}'
+    assertRedirects(response, expected_url)
     comments_count = Comment.objects.count()
     assert comments_count == 0
 
@@ -26,6 +26,8 @@ def test_anonymous_user_cant_create_comment(client, news_pk_arg, form_data):
 def test_author_user_can_create_comment(author_client, news_pk_arg, form_data):
     url = reverse('news:detail', args=(news_pk_arg))
     response = author_client.post(url, data=form_data)
+    expected_url = f'{url}#comments'
+    assertRedirects(response, expected_url)
     comments_count = Comment.objects.count()
     assert comments_count == 1
 
@@ -49,7 +51,8 @@ def test_author_can_delete_comment(author_client, comment_pk_arg, news_pk_arg):
     assert comments_count == 0
 
 
-def test_user_cant_delete_comment_of_another_user(reader_client, comment_pk_arg):
+def test_user_cant_delete_comment_of_another_user(reader_client,
+                                                  comment_pk_arg):
     delete_url = reverse('news:delete', args=(comment_pk_arg))
     response = reader_client.delete(delete_url)
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -57,7 +60,11 @@ def test_user_cant_delete_comment_of_another_user(reader_client, comment_pk_arg)
     assert comments_count == 1
 
 
-def test_author_can_edit_comment(author_client, comment, comment_pk_arg, form_data, news_pk_arg):
+def test_author_can_edit_comment(author_client,
+                                 comment,
+                                 comment_pk_arg,
+                                 form_data,
+                                 news_pk_arg):
     news_url = reverse('news:detail', args=(news_pk_arg))
     url_to_comments = news_url + '#comments'
     edit_url = reverse('news:edit', args=(comment_pk_arg))
@@ -67,7 +74,10 @@ def test_author_can_edit_comment(author_client, comment, comment_pk_arg, form_da
     assert comment.text == form_data['text']
 
 
-def test_user_cant_edit_comment_of_another_user(reader_client, comment, form_data, comment_pk_arg):
+def test_user_cant_edit_comment_of_another_user(reader_client,
+                                                comment,
+                                                form_data,
+                                                comment_pk_arg):
     COMMENT_TEXT = Comment.objects.get(id=comment.id)
     edit_url = reverse('news:edit', args=(comment_pk_arg))
     response = reader_client.post(edit_url, data=form_data)
